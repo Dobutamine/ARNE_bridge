@@ -1,10 +1,10 @@
 const net = require("net");
 
-let arne_ip = "192.168.178.24";
+let arne_ip = "127.0.0.1";
 let apiUrl = "https://explain-monitor.com";
 let user = {
-  name: "Timothy Antonius",
-  password: "y5qkqjed",
+  name: "ARNE_101",
+  password: "ARNE_101",
   config: "",
   token: "",
   loggedIn: false,
@@ -21,8 +21,6 @@ let password = "y5qkqjed";
 const arne_port = 50005;
 let connectionTimer = null;
 let getVitalsTimer = null;
-
-//{"HeartRate":50,"O2Sat":50,"RespRate":50,"Temperature":37,"ProtocolVersion":"1.0"}
 
 // login to Explain monitor
 logInExplain = async function () {
@@ -44,17 +42,19 @@ logInExplain = async function () {
     user.token = data.token;
     user.loggedIn = true;
 
+    // login succeeded so start pulling the vitals from the server
     getVitalsTimer = setInterval(() => getStateExplain(), 1000);
-
+    console.log("Connected to Explain-monitor.com using login: ", user.name)
+    console.log("Start pulling vitals data at 1 second interval.")
     return true;
   } else {
+    console.log("Connection to Explain-monitor.com failed using login: ", user.name)
     return false;
   }
 };
 
 getStateExplain = async function () {
   const url = `${apiUrl}/api/states/get_state?token=${user.token}`;
-  console.log(user.token);
   // get the user login data
   let response = await fetch(url, {
     method: "POST",
@@ -69,50 +69,72 @@ getStateExplain = async function () {
   });
 
   if (response.status === 200) {
+    // received state from server for the current ARNE
     let data = await response.json();
-    vitals.HeartRate = data.vitals.heartRate;
-    vitals.O2Sat = data.vitals.spo2Pre;
-    vitals.RespRate = data.vitals.respRate;
-    vitals.Temperature = data.vitals.bodyTemp;
+    if (data.vitals.arne_hr_connected) {
+      vitals.HeartRate = data.vitals.heartRate;
+    } else {
+      vitals.HeartRate = null
+    }
+    if (data.vitals.arne_spo2_connected) {
+      vitals.O2Sat = data.vitals.spo2Pre;
+    } else {
+      vitals.O2Sat = null
+    }
+    
+    if (data.vitals.arne_rr_connected) {
+      vitals.RespRate = data.vitals.respRate;
+    } else {
+      vitals.RespRate = null
+    }
+   
+    if (data.vitals.arne_temp_connected) {
+      vitals.Temperature = data.vitals.bodyTemp;
+    } else {
+      vitals.Temperature = null
+    }
+    updateArne()
     return true;
   } else {
-    // we can't find a config for this user so we have to supply the default one
-    console.log("Failed to load the state.");
+    // we can't find a state for this user so we have to supply the default one
+    console.log("Failed to load the state from explain-monitor.com");
+    vitals.HeartRate = null
+    vitals.O2Sat = null
+    vitals.RespRate = null
+    vitals.Temperature = null
     return false;
   }
 };
+
 // Connect to the server
 updateArne = function () {
   // create a client
-  const client = new net.Socket();
+  try {
+    const client = new net.Socket();
+    client.connect(50005, arne_ip, () => {
+      // Convert the object to a string
+      const jsonData = JSON.stringify(vitals);
+      // write data to arne
+      client.write(jsonData);
+    });
+  
+    client.on("error", () => {
+      console.log('Connection to ARNE failed. Is ARNE running and in training mode?')
+    })
+    // Handle connection close
+    client.on("close", () => {
+      // console.log("disconnected");
+    });
 
-  client.connect(50005, arne_ip, () => {
-    console.log("Connected to server");
-    // Convert the object to a string
-    const jsonData = JSON.stringify(vitals);
-    // write data to arne
-    client.write(jsonData);
-  });
+  } catch (e) {
+    console.log("Connection to ARNE failed.")
+  }
 
-  // Handle connection close
-  client.on("close", () => {
-    console.log("disconnected");
-  });
-
-  // Receive data from the server
-  client.on("data", (data) => {
-    console.log("Received data:", data.toString());
-
-    // // Close the connection
-    // client.end();
-  });
 };
 
 let result = logInExplain();
-if (result) {
-  // fetch data on a regular basis
-}
 
-setInterval(() => {
-  updateArne();
-}, 1000);
+
+// setInterval(() => {
+//   updateArne();
+// }, 1000);
