@@ -1,0 +1,11 @@
+{
+  "name": "arne_bridge",
+  "version": "1.0.0",
+  "description": "bridge between arne and monitor emulator",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Timothy Antonius",
+  "license": "ISC"
+}
